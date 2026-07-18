@@ -38,24 +38,69 @@ DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/chatbot
 
 Health check: [http://localhost:3000/health](http://localhost:3000/health)
 
-### Alternative: Docker Compose
+### Docker Compose (local or VPS server)
 
-Only if [Docker Desktop](https://www.docker.com/products/docker-desktop/) is installed and running:
+Runs **app + Postgres** together. Postgres is reachable inside the network as host `postgres` (not `localhost`).
+
+1. Install Docker on the server ([Docker Engine](https://docs.docker.com/engine/install/) or Docker Desktop).
+2. Copy the project to the server (git clone).
+3. Create `.env` from the example and fill secrets:
 
 ```bash
-docker compose up -d
-npm install
-npm run migrate
-npm run dev
+cp .env.example .env
+nano .env
 ```
 
-Install Docker (optional):
+Set at least:
 
-```powershell
-winget install Docker.DockerDesktop
+```env
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=pick-a-strong-password
+POSTGRES_DB=chatbot
+DOCKER_DATABASE_URL=postgresql://postgres:pick-a-strong-password@postgres:5432/chatbot
+META_VERIFY_TOKEN=your-verify-token
+META_APP_SECRET=your-app-secret
+WHATSAPP_TOKEN=...
+WHATSAPP_PHONE_NUMBER_ID=...
+GEMINI_API_KEY=...
+SKIP_META_SIGNATURE=false
 ```
 
-Then restart the terminal (and finish Docker Desktop’s first-run setup) before using `docker compose`.
+`DOCKER_DATABASE_URL` must use host **`postgres`** (the Docker service name), not `localhost`.
+
+4. Start:
+
+```bash
+docker compose up -d --build
+```
+
+5. Check:
+
+```bash
+docker compose ps
+docker compose logs -f app
+curl http://localhost:3000/health
+```
+
+Expect `"status":"ok"` and `"db":"up"`.
+
+6. Point Meta webhook to your public URL:
+
+`https://YOUR_DOMAIN_OR_IP:3000/webhook`
+
+(Prefer Nginx + HTTPS in production; put Meta callback on `https://yourdomain.com/webhook`.)
+
+Useful commands:
+
+```bash
+docker compose logs -f          # all logs
+docker compose restart app      # after .env change: recreate
+docker compose up -d --force-recreate app
+docker compose down             # stop (keeps DB volume)
+docker compose down -v          # stop AND wipe Postgres data
+```
+
+**Local npm (no Docker app)** still uses `DATABASE_URL=...@localhost:5432/chatbot` and `npm run migrate:dev`.
 
 ## Environment variables
 

@@ -1,22 +1,40 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: sales-agent-postgres
+    container_name: chatbot-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: chatbot
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-chatbot}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
       - ./src/db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    # Do not expose 5432 publicly on a VPS unless you need remote DB access
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d chatbot"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
 
+  app:
+    build: .
+    container_name: gemini-sales-agent
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      # Host must be "postgres" (service name). Prefer DOCKER_DATABASE_URL so
+      # passwords with @ # : do not break URL parsing.
+      DATABASE_URL: ${DOCKER_DATABASE_URL:-postgresql://postgres:changeme@postgres:5432/chatbot}
+      NODE_ENV: production
+      PORT: 3000
+      SKIP_META_SIGNATURE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
-  postgres_data:
+  pgdata:
